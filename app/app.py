@@ -28,7 +28,7 @@ class ChatMessage(ft.Row):
             ft.Column(
                 [
                     ft.Text(message.user_name, weight="bold"),
-                    ft.Text(message.text, selectable=True),
+                    ft.Markdown(message.text, selectable=True, extension_set=ft.MarkdownExtensionSet.GITHUB_WEB),
                 ],
                 tight=True,
                 spacing=5,
@@ -87,30 +87,15 @@ def main(page: ft.Page):
             auth_user.update()
         else:
             plain_password = set_plain_password(page, auth_user.value)
+            # if we have the API keys, initialize the agent
             if not (
                 hazina_config.cdp_api_key_name is None
                 or hazina_config.cdp_api_key_private_key is None
                 or hazina_config.openai_api_key is None
             ):
-                print(
-                    "Encrypted cdp_api_key_name: {}".format(
-                        hazina_config.cdp_api_key_name
-                    )
-                )
-                print(
-                    "Encrypted cdp_api_key_private_key: {}".format(
-                        hazina_config.cdp_api_key_private_key
-                    )
-                )
-                print(
-                    "Encrypted openai_api_key: {}".format(hazina_config.openai_api_key)
-                )
                 cdpkn = decrypt(plain_password, hazina_config.cdp_api_key_name)
                 cdppk = decrypt(plain_password, hazina_config.cdp_api_key_private_key)
                 oaik = decrypt(plain_password, hazina_config.openai_api_key)
-                print("Decypted cdp_api_key_name: {}".format(cdpkn))
-                print("Decypted cdp_api_key_private_key: {}".format(cdppk))
-                print("Decypted openai_api_key: {}".format(oaik))
                 initialize_agent(
                     cdp_api_key_name=cdpkn,
                     cdp_api_key_private_key=cdppk,
@@ -125,6 +110,7 @@ def main(page: ft.Page):
                     )
                     page.pubsub.send_all(msg)
             else:
+                # otherwise, open the API keys dialog
                 keys_dlg.open = True
             welcome_dlg.open = False
             page.update()
@@ -143,6 +129,7 @@ def main(page: ft.Page):
             pass1.error_text = "Password is not strong enough!"
             pass1.update()
         else:
+            # save the password hash on disk, and plain password in session
             plain_password = set_plain_password(page, pass1.value)
             hazina_config.passhash = hash_password(plain_password)
             save_hazina_config(hazina_config)
@@ -237,7 +224,6 @@ def main(page: ft.Page):
         auth_user = ft.TextField(
             label="Enter your password",
             autofocus=True,
-            on_submit=click_auth,
             password=True,
             can_reveal_password=True,
         )
