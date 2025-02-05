@@ -13,6 +13,17 @@ flet run app.py
 flet run --web app.py
 ```
 
+### Langchain
+
+To install the custom version of [langchain](https://github.com/dloghin/langchain):
+```
+pip uninstall langchain
+pip install /home/ubuntu/git/langchain/libs/langchain
+cd examples
+python tools_agent.py
+```
+
+
 ## About
 
 [Hazina](https://github.com/dloghin/hazina) is a crypto wallet in the form of an AI chat. It is based on Coinbase [AgentKit](https://github.com/coinbase/agentkit). The UI is based in [Flet](https://flet.dev/).

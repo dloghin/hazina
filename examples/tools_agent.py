@@ -22,10 +22,10 @@ def magic_function(input: int) -> int:
 tools = [magic_function, check_weather]
 
 # *** Ollama
-# model = ChatOllama(model="llama3-groq-tool-use")
+model = ChatOllama(model="llama3-groq-tool-use")
 
 # *** OpenAI
-model = ChatOpenAI(model="gpt-4o")
+# model = ChatOpenAI(model="gpt-4o")
 
 query = "what is the weather in Paris?"
 # query = "what is the value of magic_function(3)?"
