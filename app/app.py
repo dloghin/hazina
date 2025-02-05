@@ -3,7 +3,7 @@
 from encryptions import decrypt, encrypt
 from passwords import check_new_password, check_password, hash_password
 from hazina_config import load_hazina_config, save_hazina_config
-from chatbot import get_agent_response, initialize_agent
+from chatbot import get_agent_response, get_network, get_wallet_address, get_wallet_balance, initialize_agent
 from langchain_core.messages import HumanMessage
 import flet as ft
 
@@ -28,7 +28,11 @@ class ChatMessage(ft.Row):
             ft.Column(
                 [
                     ft.Text(message.user_name, weight="bold"),
-                    ft.Markdown(message.text, selectable=True, extension_set=ft.MarkdownExtensionSet.GITHUB_WEB),
+                    ft.Markdown(
+                        message.text,
+                        selectable=True,
+                        extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                    ),
                 ],
                 tight=True,
                 spacing=5,
@@ -109,6 +113,10 @@ def main(page: ft.Page):
                         message_type="chat_message",
                     )
                     page.pubsub.send_all(msg)
+
+                txt_wallet_address.value = get_wallet_address()
+                txt_network.value = get_network()
+                txt_wallet_balance.value = get_wallet_balance(txt_wallet_address.value, "eth") + " ETH"
             else:
                 # otherwise, open the API keys dialog
                 keys_dlg.open = True
@@ -172,7 +180,6 @@ def main(page: ft.Page):
                     message_type="chat_message",
                 )
             )
-
             responses = get_agent_response(new_message.value)
             for response in responses:
                 msg = Message(
@@ -281,8 +288,13 @@ def main(page: ft.Page):
         on_submit=send_message_click,
     )
 
+    txt_wallet_address = ft.Text(value="Wallet Address")
+    txt_wallet_balance = ft.Text(value="Wallet Balance")
+    txt_network = ft.Text(value="Current Network")
+
     # Add everything to the page
     page.add(
+        ft.Row([ft.Icon(ft.Icons.WALLET, size=30), txt_wallet_address, ft.Icon(ft.Icons.BALANCE, size=30), txt_wallet_balance, ft.Icon(ft.Icons.NETWORK_CELL, size=30), txt_network]),
         ft.Container(
             content=chat,
             border=ft.border.all(1, ft.Colors.OUTLINE),

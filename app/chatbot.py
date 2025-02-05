@@ -1,5 +1,6 @@
 # Most of the code taken from the CDP Agentkit Chatbot Example: https://github.com/coinbase/agentkit/blob/master/python/examples/cdp-langchain-chatbot/chatbot.py
 
+import json
 import os
 import sys
 import time
@@ -13,12 +14,53 @@ from langgraph.prebuilt import create_react_agent
 from cdp_langchain.agent_toolkits import CdpToolkit
 from cdp_langchain.utils import CdpAgentkitWrapper
 
+from cdp import Wallet, WalletData
+
 # Configure a file to persist the agent's CDP MPC Wallet Data.
 wallet_data_file = "wallet_data.txt"
 
 # Global vars to store the agent executor and config.
 agent_executor = None
 agent_config = None
+cdp_toolkit = None
+
+
+def get_wallet_address():
+    if os.path.exists(wallet_data_file):
+        with open(wallet_data_file) as f:
+            try:
+                json_data = json.loads(f.read())
+                return json_data["default_address_id"]
+            except:
+                return "no address"
+    return "no address"
+
+
+def get_wallet_balance(address_id, asset_id):
+    if os.path.exists(wallet_data_file):
+        with open(wallet_data_file) as f:
+            try:
+                wallet_data = WalletData.from_dict(json.loads(f.read()))
+                wallet = Wallet.import_wallet(wallet_data)
+                for address in wallet.addresses:
+                    if address.address_id == address_id:
+                        return "{}".format(address.balance(asset_id))
+                return "no such address in wallet"
+            except Exception as e:
+                print("Error in get_wallet_balance(): {}".format(e))
+                return "no address"
+    return "no address"
+
+
+def get_network():
+    if os.path.exists(wallet_data_file):
+        with open(wallet_data_file) as f:
+            try:
+                json_data = json.loads(f.read())
+                return json_data["network_id"]
+            except:
+                return "no network"
+    return "no network"
 
 
 def initialize_agent(cdp_api_key_name, cdp_api_key_private_key, openai_api_key):
@@ -49,6 +91,7 @@ def initialize_agent(cdp_api_key_name, cdp_api_key_private_key, openai_api_key):
         f.write(wallet_data)
 
     # Initialize CDP Agentkit Toolkit and get tools.
+    global cdp_toolkit
     cdp_toolkit = CdpToolkit.from_cdp_agentkit_wrapper(agentkit)
     tools = cdp_toolkit.get_tools()
 
@@ -175,6 +218,11 @@ def main():
         run_autonomous_mode(agent_executor=agent_executor, config=config)
 
 
+def test():
+    print(get_wallet_balance("0x3Fa331F48d1cbc59cc28d28ea1ac7CdAe24959e0", "eth"))
+
+
 if __name__ == "__main__":
-    print("Starting Agent...")
-    main()
+    # print("Starting Agent...")
+    # main()
+    test()
