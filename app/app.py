@@ -59,12 +59,15 @@ class ChatMessage(ft.Row):
         ]
         return colors_lookup[hash(user_name) % len(colors_lookup)]
 
+
 def get_plain_password(page: ft.Page):
     return page.session.get("plain_password")
+
 
 def set_plain_password(page: ft.Page, plain_password: str):
     page.session.set("plain_password", plain_password)
     return plain_password
+
 
 def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
@@ -89,9 +92,19 @@ def main(page: ft.Page):
                 or hazina_config.cdp_api_key_private_key is None
                 or hazina_config.openai_api_key is None
             ):
-                print("Encrypted cdp_api_key_name: {}".format(hazina_config.cdp_api_key_name))
-                print("Encrypted cdp_api_key_private_key: {}".format(hazina_config.cdp_api_key_private_key))
-                print("Encrypted openai_api_key: {}".format(hazina_config.openai_api_key))
+                print(
+                    "Encrypted cdp_api_key_name: {}".format(
+                        hazina_config.cdp_api_key_name
+                    )
+                )
+                print(
+                    "Encrypted cdp_api_key_private_key: {}".format(
+                        hazina_config.cdp_api_key_private_key
+                    )
+                )
+                print(
+                    "Encrypted openai_api_key: {}".format(hazina_config.openai_api_key)
+                )
                 cdpkn = decrypt(plain_password, hazina_config.cdp_api_key_name)
                 cdppk = decrypt(plain_password, hazina_config.cdp_api_key_private_key)
                 oaik = decrypt(plain_password, hazina_config.openai_api_key)
