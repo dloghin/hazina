@@ -1,5 +1,6 @@
 import hashlib
 
+
 def check_new_password(pass_str):
     """Check if a password is strong."""
     if len(pass_str) < 8:
@@ -14,9 +15,11 @@ def check_new_password(pass_str):
         return False
     return True
 
+
 def hash_password(pass_str):
     """Hash a password string."""
     return hashlib.sha256(pass_str.encode()).hexdigest()
+
 
 def check_password(pass_str, pass_hash):
     """Check if a password matches its hash."""

@@ -1,3 +1,6 @@
+# Initial code taken from Flet example: https://github.com/flet-dev/examples/blob/main/python/tutorials/chat/chat.py
+
+from encryptions import decrypt, encrypt
 from passwords import check_new_password, check_password, hash_password
 from hazina_config import load_hazina_config, save_hazina_config
 from chatbot import get_agent_response, initialize_agent
@@ -56,6 +59,12 @@ class ChatMessage(ft.Row):
         ]
         return colors_lookup[hash(user_name) % len(colors_lookup)]
 
+def get_plain_password(page: ft.Page):
+    return page.session.get("plain_password")
+
+def set_plain_password(page: ft.Page, plain_password: str):
+    page.session.set("plain_password", plain_password)
+    return plain_password
 
 def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
@@ -63,10 +72,7 @@ def main(page: ft.Page):
 
     hazina_config = load_hazina_config()
 
-    agent_executor, agent_config = initialize_agent()
-
-    page.session.set("user_name", "Me (human)")
-
+    user_name = "Me (human)"
     agent_name = "Hazina (AI)"
 
     def click_auth(e):
@@ -77,15 +83,37 @@ def main(page: ft.Page):
             auth_user.error_text = "Incorrect password!"
             auth_user.update()
         else:
-            welcome_dlg.open = False
-            responses = get_agent_response(agent_executor, agent_config, "Hi!")
-            for response in responses:
-                msg = Message(
+            plain_password = set_plain_password(page, auth_user.value)
+            if not (
+                hazina_config.cdp_api_key_name is None
+                or hazina_config.cdp_api_key_private_key is None
+                or hazina_config.openai_api_key is None
+            ):
+                print("Encrypted cdp_api_key_name: {}".format(hazina_config.cdp_api_key_name))
+                print("Encrypted cdp_api_key_private_key: {}".format(hazina_config.cdp_api_key_private_key))
+                print("Encrypted openai_api_key: {}".format(hazina_config.openai_api_key))
+                cdpkn = decrypt(plain_password, hazina_config.cdp_api_key_name)
+                cdppk = decrypt(plain_password, hazina_config.cdp_api_key_private_key)
+                oaik = decrypt(plain_password, hazina_config.openai_api_key)
+                print("Decypted cdp_api_key_name: {}".format(cdpkn))
+                print("Decypted cdp_api_key_private_key: {}".format(cdppk))
+                print("Decypted openai_api_key: {}".format(oaik))
+                initialize_agent(
+                    cdp_api_key_name=cdpkn,
+                    cdp_api_key_private_key=cdppk,
+                    openai_api_key=oaik,
+                )
+                responses = get_agent_response("Hi!")
+                for response in responses:
+                    msg = Message(
                         "Agent {}".format(agent_name),
                         response,
                         message_type="chat_message",
                     )
-                page.pubsub.send_all(msg)
+                    page.pubsub.send_all(msg)
+            else:
+                keys_dlg.open = True
+            welcome_dlg.open = False
             page.update()
 
     def click_set_pass(e):
@@ -102,28 +130,56 @@ def main(page: ft.Page):
             pass1.error_text = "Password is not strong enough!"
             pass1.update()
         else:
-            hazina_config.passhash = hash_password(pass1.value)
+            plain_password = set_plain_password(page, pass1.value)
+            hazina_config.passhash = hash_password(plain_password)
             save_hazina_config(hazina_config)
             welcome_dlg.open = False
+            keys_dlg.open = True
+            page.update()
+
+    def click_set_keys(e):
+        if not cdp_key_name.value:
+            cdp_key_name.error_text = "CDP_API_KEY_NAME cannot be blank!"
+            cdp_key_name.update()
+        elif not cdp_key_pk.value:
+            cdp_key_pk.error_text = "CDP_API_KEY_PRIVATE_KEY cannot be blank!"
+            cdp_key_pk.update()
+        elif not openai_key.value:
+            openai_key.error_text = "OPENAI_API_KEY cannot be blank!"
+            openai_key.update()
+        else:
+            plain_password = get_plain_password(page)
+            hazina_config.cdp_api_key_name = encrypt(plain_password, cdp_key_name.value)
+            hazina_config.cdp_api_key_private_key = encrypt(
+                plain_password, cdp_key_pk.value
+            )
+            hazina_config.openai_api_key = encrypt(plain_password, openai_key.value)
+            save_hazina_config(hazina_config)
+            initialize_agent(
+                cdp_api_key_name=cdp_key_name.value,
+                cdp_api_key_private_key=cdp_key_pk.value,
+                openai_api_key=openai_key.value,
+            )
+            keys_dlg.open = False
             page.update()
 
     def send_message_click(e):
         if new_message.value != "":
             page.pubsub.send_all(
                 Message(
-                    page.session.get("user_name"),
+                    user_name,
                     new_message.value,
                     message_type="chat_message",
                 )
             )
 
-            responses = get_agent_response(agent_executor, agent_config, new_message.value)
+            responses = get_agent_response(new_message.value)
             for response in responses:
                 msg = Message(
-                        "Agent {}".format(agent_name),
-                        response,
-                        message_type="chat_message",
-                    )
+                    "Agent {}".format(agent_name),
+                    response,
+                    message_type="chat_message",
+                )
                 page.pubsub.send_all(msg)
 
             new_message.value = ""
@@ -146,13 +202,13 @@ def main(page: ft.Page):
             label="Set a password",
             autofocus=True,
             password=True,
-            can_reveal_password=True
+            can_reveal_password=True,
         )
         pass2 = ft.TextField(
             label="Enter the same password again",
             autofocus=True,
             password=True,
-            can_reveal_password=True
+            can_reveal_password=True,
         )
         welcome_dlg = ft.AlertDialog(
             open=True,
@@ -170,7 +226,7 @@ def main(page: ft.Page):
             autofocus=True,
             on_submit=click_auth,
             password=True,
-            can_reveal_password=True
+            can_reveal_password=True,
         )
         welcome_dlg = ft.AlertDialog(
             open=True,
@@ -181,6 +237,31 @@ def main(page: ft.Page):
             actions_alignment=ft.MainAxisAlignment.END,
         )
         page.overlay.append(welcome_dlg)
+
+    # A dialog to set user keys
+    cdp_key_name = ft.TextField(
+        label="CDP_API_KEY_NAME",
+        autofocus=True,
+    )
+    cdp_key_pk = ft.TextField(
+        label="CDP_API_KEY_PRIVATE_KEY",
+        autofocus=True,
+    )
+    openai_key = ft.TextField(
+        label="OPENAI_API_KEY",
+        autofocus=True,
+    )
+    keys_dlg = ft.AlertDialog(
+        open=False,
+        modal=True,
+        title=ft.Text("Keys Settings"),
+        content=ft.Column(
+            [cdp_key_name, cdp_key_pk, openai_key], width=300, height=160, tight=True
+        ),
+        actions=[ft.ElevatedButton(text="Save", on_click=click_set_keys)],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(keys_dlg)
 
     # Chat messages
     chat = ft.ListView(
@@ -221,5 +302,6 @@ def main(page: ft.Page):
             ]
         ),
     )
+
 
 ft.app(target=main)

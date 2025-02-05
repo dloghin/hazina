@@ -1,9 +1,8 @@
+# Most of the code taken from the CDP Agentkit Chatbot Example: https://github.com/coinbase/agentkit/blob/master/python/examples/cdp-langchain-chatbot/chatbot.py
+
 import os
 import sys
 import time
-import dotenv
-
-from dotenv import load_dotenv
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
@@ -17,13 +16,15 @@ from cdp_langchain.utils import CdpAgentkitWrapper
 # Configure a file to persist the agent's CDP MPC Wallet Data.
 wallet_data_file = "wallet_data.txt"
 
-load_dotenv()
+# Global vars to store the agent executor and config.
+agent_executor = None
+agent_config = None
 
 
-def initialize_agent():
+def initialize_agent(cdp_api_key_name, cdp_api_key_private_key, openai_api_key):
     """Initialize the agent with CDP Agentkit."""
     # Initialize LLM.
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key)
 
     wallet_data = None
 
@@ -32,10 +33,13 @@ def initialize_agent():
             wallet_data = f.read()
 
     # Configure CDP Agentkit Langchain Extension.
-    values = {}
+    values = {
+        "cdp_api_key_name": cdp_api_key_name,
+        "cdp_api_key_private_key": cdp_api_key_private_key,
+    }
     if wallet_data is not None:
         # If there is a persisted agentic wallet, load it and pass to the CDP Agentkit Wrapper.
-        values = {"cdp_wallet_data": wallet_data}
+        values["cdp_wallet_data"] = wallet_data
 
     agentkit = CdpAgentkitWrapper(**values)
 
@@ -50,38 +54,44 @@ def initialize_agent():
 
     # Store buffered conversation history in memory.
     memory = MemorySaver()
-    config = {"configurable": {"thread_id": "CDP Agentkit Chatbot Example!"}}
+
+    global agent_config
+    agent_config = {"configurable": {"thread_id": "CDP Agentkit Chatbot Example!"}}
 
     # Create ReAct Agent using the LLM and CDP Agentkit tools.
-    return (
-        create_react_agent(
-            llm,
-            tools=tools,
-            checkpointer=memory,
-            state_modifier=(
-                "You are a helpful agent that can interact onchain using the Coinbase Developer Platform AgentKit. "
-                "You are empowered to interact onchain using your tools. If you ever need funds, you can request "
-                "them from the faucet if you are on network ID 'base-sepolia'. If not, you can provide your wallet "
-                "details and request funds from the user. Before executing your first action, get the wallet details "
-                "to see what network you're on. If there is a 5XX (internal) HTTP error code, ask the user to try "
-                "again later. If someone asks you to do something you can't do with your currently available tools, "
-                "you must say so, and encourage them to implement it themselves using the CDP SDK + Agentkit, "
-                "recommend they go to docs.cdp.coinbase.com for more information. Be concise and helpful with your "
-                "responses. Refrain from restating your tools' descriptions unless it is explicitly requested."
-            ),
+    global agent_executor
+    agent_executor = create_react_agent(
+        llm,
+        tools=tools,
+        checkpointer=memory,
+        state_modifier=(
+            "You are a helpful agent that can interact onchain using the Coinbase Developer Platform AgentKit. "
+            "You are empowered to interact onchain using your tools. If you ever need funds, you can request "
+            "them from the faucet if you are on network ID 'base-sepolia'. If not, you can provide your wallet "
+            "details and request funds from the user. Before executing your first action, get the wallet details "
+            "to see what network you're on. If there is a 5XX (internal) HTTP error code, ask the user to try "
+            "again later. If someone asks you to do something you can't do with your currently available tools, "
+            "you must say so, and encourage them to implement it themselves using the CDP SDK + Agentkit, "
+            "recommend they go to docs.cdp.coinbase.com for more information. Be concise and helpful with your "
+            "responses. Refrain from restating your tools' descriptions unless it is explicitly requested."
         ),
-        config,
     )
+    return agent_executor, agent_config
 
 
-def get_agent_response(agent_executor, agent_config, message: str):
+def get_agent_response(message: str):
     responses = []
+    if agent_executor is None or agent_config is None:
+        print("Agent not initialized. Please run initialize_agent() first.")
+        return responses
+
     for chunk in agent_executor.stream(
         {"messages": [HumanMessage(content=message)]}, agent_config
     ):
         if "agent" in chunk and chunk["agent"]["messages"][0].content != "":
             responses.append(chunk["agent"]["messages"][0].content)
     return responses
+
 
 # Autonomous Mode
 def run_autonomous_mode(agent_executor, config, interval=10):
