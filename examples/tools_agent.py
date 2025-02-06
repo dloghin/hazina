@@ -23,16 +23,17 @@ tools = [magic_function, check_weather]
 
 # *** Ollama
 model = ChatOllama(model="llama3-groq-tool-use")
+# model = ChatOllama(model="MFDoom/deepseek-r1-tool-calling")
 
 # *** OpenAI
 # model = ChatOpenAI(model="gpt-4o")
 
-query = "what is the weather in Paris?"
-# query = "what is the value of magic_function(3)?"
+# query = "what is the weather in Paris?"
+query = "what is the value of magic_function(3)?"
 
 agent_prompt = ChatPromptTemplate.from_messages(
     [
-        ("system", "You are a helpful assistant"),
+        ("system", "You are a helpful assistant."),
         ("human", "{input}"),
         ("placeholder", "{agent_scratchpad}"),
     ]
