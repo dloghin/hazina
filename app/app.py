@@ -1,9 +1,18 @@
 # Initial code taken from Flet example: https://github.com/flet-dev/examples/blob/main/python/tutorials/chat/chat.py
 
+import asyncio
+import random
+from telegram_bot import connect_to_telegram
 from encryptions import decrypt, encrypt
 from passwords import check_new_password, check_password, hash_password
 from hazina_config import load_hazina_config, save_hazina_config
-from chatbot import get_agent_response, get_network, get_wallet_address, get_wallet_balance, initialize_agent
+from chatbot import (
+    get_agent_response,
+    get_network,
+    get_wallet_address,
+    get_wallet_balance,
+    initialize_agent,
+)
 from langchain_core.messages import HumanMessage
 import flet as ft
 
@@ -116,7 +125,9 @@ def main(page: ft.Page):
 
                 txt_wallet_address.value = get_wallet_address()
                 txt_network.value = get_network()
-                txt_wallet_balance.value = get_wallet_balance(txt_wallet_address.value, "eth") + " ETH"
+                txt_wallet_balance.value = (
+                    get_wallet_balance(txt_wallet_address.value, "eth") + " ETH"
+                )
             else:
                 # otherwise, open the API keys dialog
                 keys_dlg.open = True
@@ -202,6 +213,28 @@ def main(page: ft.Page):
         page.update()
 
     page.pubsub.subscribe(on_message)
+
+    def on_connect_telegram(username, userid):
+        txt_telegram.value = "Connected with Telegram as {}".format(username)
+        msg = Message(
+            "Agent {}".format(agent_name),
+            "Connected with Telegram as {}".format(username),
+            message_type="chat_message",
+        )
+        page.pubsub.send_all(msg)
+        page.update()
+
+    def connect_telegram(e):
+        token = str(random.choice(range(1000000000, 9999999999)))
+        msg = Message(
+            "Agent {}".format(agent_name),
+            "To connect with Telegram, please paste the following code in the Telegram chat: **{}**".format(
+                token
+            ),
+            message_type="chat_message",
+        )
+        page.pubsub.send_all(msg)
+        asyncio.run(connect_to_telegram(token, on_connect_telegram))
 
     if hazina_config is None or hazina_config.passhash is None:
         # A dialog to set user password
@@ -291,10 +324,29 @@ def main(page: ft.Page):
     txt_wallet_address = ft.Text(value="Wallet Address")
     txt_wallet_balance = ft.Text(value="Wallet Balance")
     txt_network = ft.Text(value="Current Network")
+    txt_telegram = ft.Text(value="Not Connected with Telegram")
+
+    btn_telegram = ft.IconButton(
+        icon=ft.Icons.TELEGRAM,
+        icon_size=40,
+        url="https://t.me/hazina_app_bot",
+        on_click=connect_telegram,
+    )
 
     # Add everything to the page
     page.add(
-        ft.Row([ft.Icon(ft.Icons.WALLET, size=30), txt_wallet_address, ft.Icon(ft.Icons.BALANCE, size=30), txt_wallet_balance, ft.Icon(ft.Icons.NETWORK_CELL, size=30), txt_network]),
+        ft.Row(
+            [
+                ft.Icon(ft.Icons.WALLET, size=30),
+                txt_wallet_address,
+                ft.Icon(ft.Icons.BALANCE, size=30),
+                txt_wallet_balance,
+                ft.Icon(ft.Icons.NETWORK_CELL, size=30),
+                txt_network,
+                btn_telegram,
+                txt_telegram,
+            ]
+        ),
         ft.Container(
             content=chat,
             border=ft.border.all(1, ft.Colors.OUTLINE),
