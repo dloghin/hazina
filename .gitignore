@@ -1,0 +1,4 @@
+__pycache__
+.*
+!.gitignore
+wallet_data.txt
