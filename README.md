@@ -35,9 +35,9 @@ pip install -r requirments.txt
 
 ## About
 
-[Hazina](https://github.com/dloghin/hazina) is a crypto wallet in the form of an AI chat. It is based on Coinbase [AgentKit](https://github.com/coinbase/agentkit). The UI is based in [Flet](https://flet.dev/).
+[Hazina](https://github.com/dloghin/hazina) is a crypto wallet in the form of an AI-powered chat. It uses Coinbase [AgentKit](https://github.com/coinbase/agentkit). The UI is developed with [Flet](https://flet.dev/).
 
-Word meaning: "hazina" is derived from ["hazna"](https://en.wiktionary.org/wiki/hazna) meaning treasure in Balkan languages.
+Word meaning: _"hazina"_ is derived from [_"hazna"_](https://en.wiktionary.org/wiki/hazna) meaning _"treasure"_ in Balkan languages.
 
 ## License
 
