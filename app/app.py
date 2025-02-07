@@ -210,10 +210,11 @@ def main(page: ft.Page):
 
     def send_message_click(e):
         if new_message.value != "":
+            message = new_message.value
             page.pubsub.send_all(
                 Message(
                     user_name,
-                    new_message.value,
+                    message,
                     message_type="chat_message",
                 )
             )
@@ -221,7 +222,7 @@ def main(page: ft.Page):
             new_message.focus()
             page.update()
 
-            responses = get_agent_response(new_message.value)
+            responses = get_agent_response(message)
             for response in responses:
                 publish_message(page, response, agent_name)
 
@@ -342,16 +343,34 @@ def main(page: ft.Page):
         on_submit=send_message_click,
     )
 
+    page.theme_mode = ft.ThemeMode.LIGHT
+    def change_theme(e):
+        if page.theme_mode == ft.ThemeMode.LIGHT:
+            page.theme_mode = ft.ThemeMode.DARK
+            txt_theme.value = "Dark Theme"
+            btn_theme.icon = ft.Icons.LIGHT_MODE
+        else:
+            page.theme_mode = ft.ThemeMode.LIGHT
+            txt_theme.value = "Light Theme"
+            btn_theme.icon = ft.Icons.DARK_MODE
+        page.update()
+
     txt_wallet_address = ft.Text(value="Wallet Address")
     txt_wallet_balance = ft.Text(value="Wallet Balance")
     txt_network = ft.Text(value="Current Network")
     txt_telegram = ft.Text(value="Not Connected with Telegram")
+    txt_theme = ft.Text(value="Light Theme")
 
     btn_telegram = ft.IconButton(
         icon=ft.Icons.TELEGRAM,
         icon_size=40,
         url="https://t.me/hazina_app_bot",
         on_click=connect_telegram,
+    )
+    btn_theme = ft.IconButton(
+        icon=ft.Icons.DARK_MODE,
+        icon_size=40,
+        on_click=change_theme,
     )
 
     # Add everything to the page
@@ -366,6 +385,8 @@ def main(page: ft.Page):
                 txt_network,
                 btn_telegram,
                 txt_telegram,
+                btn_theme,
+                txt_theme
             ]
         ),
         ft.Container(
