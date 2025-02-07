@@ -1,6 +1,7 @@
 # Initial code taken from Flet example: https://github.com/flet-dev/examples/blob/main/python/tutorials/chat/chat.py
 
 import asyncio
+import os
 import random
 from telegram_bot import connect_to_telegram
 from encryptions import decrypt, encrypt
@@ -15,7 +16,10 @@ from chatbot import (
 )
 from langchain_core.messages import HumanMessage
 import flet as ft
+import flet_audio as fta
+from openai import OpenAI
 
+openai_client = None
 
 class Message:
     def __init__(self, user_name: str, text: str, message_type: str):
@@ -82,6 +86,32 @@ def set_plain_password(page: ft.Page, plain_password: str):
     return plain_password
 
 
+def play_sound(page: ft.Page, message: str):
+    pwd = os.getcwd()
+    afile = "{}/.tts.mp3".format(pwd)
+    if openai_client is None:
+        print("OpenAI client is not initialized")
+        return
+    response = openai_client.audio.speech.create(
+        model="tts-1",
+        voice="shimmer",
+        input=message,
+    )
+    response.stream_to_file(afile)
+    a1 = fta.Audio(
+        src=afile, autoplay=True
+    )
+    page.overlay.append(a1)
+    page.update()
+
+
+def publish_message(page: ft.Page, message: str, name: str, with_audio: bool = True):
+    msg = Message(name, message, message_type="chat_message")
+    page.pubsub.send_all(msg)
+    if with_audio:
+        play_sound(page, message)
+
+
 def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
     page.title = "Hazina - Smart Crypto Wallet with AI Agents"
@@ -100,6 +130,7 @@ def main(page: ft.Page):
             auth_user.update()
         else:
             plain_password = set_plain_password(page, auth_user.value)
+            welcome_dlg.open = False
             # if we have the API keys, initialize the agent
             if not (
                 hazina_config.cdp_api_key_name is None
@@ -114,15 +145,11 @@ def main(page: ft.Page):
                     cdp_api_key_private_key=cdppk,
                     openai_api_key=oaik,
                 )
+                global openai_client
+                openai_client = OpenAI(api_key=oaik)
                 responses = get_agent_response("Hi!")
                 for response in responses:
-                    msg = Message(
-                        "Agent {}".format(agent_name),
-                        response,
-                        message_type="chat_message",
-                    )
-                    page.pubsub.send_all(msg)
-
+                    publish_message(page, response, agent_name)
                 txt_wallet_address.value = get_wallet_address()
                 txt_network.value = get_network()
                 txt_wallet_balance.value = (
@@ -131,7 +158,6 @@ def main(page: ft.Page):
             else:
                 # otherwise, open the API keys dialog
                 keys_dlg.open = True
-            welcome_dlg.open = False
             page.update()
 
     def click_set_pass(e):
@@ -191,18 +217,13 @@ def main(page: ft.Page):
                     message_type="chat_message",
                 )
             )
-            responses = get_agent_response(new_message.value)
-            for response in responses:
-                msg = Message(
-                    "Agent {}".format(agent_name),
-                    response,
-                    message_type="chat_message",
-                )
-                page.pubsub.send_all(msg)
-
             new_message.value = ""
             new_message.focus()
             page.update()
+
+            responses = get_agent_response(new_message.value)
+            for response in responses:
+                publish_message(page, response, agent_name)
 
     def on_message(message: Message):
         if message.message_type == "chat_message":
