@@ -1,5 +1,7 @@
 python-dotenv==1.0.1
 cdp-langchain==0.0.13
 flet==0.26.0
+flet_desktop==0.26.0
+flet-audio==0.1.0
 pycryptodomex==3.21.0
 python_telegram_bot==21.10
