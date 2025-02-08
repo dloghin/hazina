@@ -20,6 +20,7 @@ import flet_audio as fta
 from openai import OpenAI
 
 openai_client = None
+sound_on = True
 
 class Message:
     def __init__(self, user_name: str, text: str, message_type: str):
@@ -108,7 +109,8 @@ def play_sound(page: ft.Page, message: str):
 def publish_message(page: ft.Page, message: str, name: str, with_audio: bool = True):
     msg = Message(name, message, message_type="chat_message")
     page.pubsub.send_all(msg)
-    if with_audio:
+    global sound_on
+    if with_audio and sound_on:
         play_sound(page, message)
 
 
@@ -238,24 +240,12 @@ def main(page: ft.Page):
 
     def on_connect_telegram(username, userid):
         txt_telegram.value = "Connected with Telegram as {}".format(username)
-        msg = Message(
-            "Agent {}".format(agent_name),
-            "Connected with Telegram as {}".format(username),
-            message_type="chat_message",
-        )
-        page.pubsub.send_all(msg)
+        publish_message(page, "Connected with Telegram as {}".format(username), agent_name)
         page.update()
 
     def connect_telegram(e):
         token = str(random.choice(range(1000000000, 9999999999)))
-        msg = Message(
-            "Agent {}".format(agent_name),
-            "To connect with Telegram, please paste the following code in the Telegram chat: **{}**".format(
-                token
-            ),
-            message_type="chat_message",
-        )
-        page.pubsub.send_all(msg)
+        publish_message(page, "To connect with Telegram, please paste the following code in the Telegram chat: **{}**".format(token), agent_name)
         asyncio.run(connect_to_telegram(token, on_connect_telegram))
 
     if hazina_config is None or hazina_config.passhash is None:
@@ -343,6 +333,18 @@ def main(page: ft.Page):
         on_submit=send_message_click,
     )
 
+    def change_sound_option(e):
+        global sound_on
+        if sound_on:
+            sound_on = False
+            txt_sound.value = "Without Sound"
+            btn_sound.icon = ft.Icons.VOLUME_OFF
+        else:
+            sound_on = True
+            txt_sound.value = "With Sound"
+            btn_sound.icon = ft.Icons.VOLUME_UP
+        page.update()
+
     page.theme_mode = ft.ThemeMode.LIGHT
     def change_theme(e):
         if page.theme_mode == ft.ThemeMode.LIGHT:
@@ -360,12 +362,18 @@ def main(page: ft.Page):
     txt_network = ft.Text(value="Current Network")
     txt_telegram = ft.Text(value="Not Connected with Telegram")
     txt_theme = ft.Text(value="Light Theme")
+    txt_sound = ft.Text(value="With Sound")
 
     btn_telegram = ft.IconButton(
         icon=ft.Icons.TELEGRAM,
         icon_size=40,
         url="https://t.me/hazina_app_bot",
         on_click=connect_telegram,
+    )
+    btn_sound = ft.IconButton(
+        icon=ft.Icons.VOLUME_UP,
+        icon_size=40,
+        on_click=change_sound_option,
     )
     btn_theme = ft.IconButton(
         icon=ft.Icons.DARK_MODE,
@@ -381,10 +389,12 @@ def main(page: ft.Page):
                 txt_wallet_address,
                 ft.Icon(ft.Icons.BALANCE, size=30),
                 txt_wallet_balance,
-                ft.Icon(ft.Icons.NETWORK_CELL, size=30),
+                ft.Icon(ft.Icons.NETWORK_CHECK, size=30),
                 txt_network,
                 btn_telegram,
                 txt_telegram,
+                btn_sound,
+                txt_sound,
                 btn_theme,
                 txt_theme
             ]
@@ -395,6 +405,8 @@ def main(page: ft.Page):
             border_radius=5,
             padding=10,
             expand=True,
+            image_src=f"/home/ubuntu/git/ct/hazina/assets/banner.png",
+            image_opacity=0.3,      # Opacity value should be between 0.0 (completely transparent) and 1.0 (not transparent).
         ),
         ft.Row(
             [
