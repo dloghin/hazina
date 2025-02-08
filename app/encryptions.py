@@ -51,7 +51,7 @@ def test():
     outputFormat = "{:<25}:{}"
 
     secret_key = "your_secure_key"
-    plain_text = "organizations/93643ddf-fa0d-4b94-acf2-e7df9332b811/apiKeys/3a50434b-0cf0-42ac-a16c-be26d73f7b65"
+    plain_text = "your plain text"
 
     print("------ AES-GCM Encryption ------")
     cipher_text = encrypt(secret_key, plain_text)

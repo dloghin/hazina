@@ -62,7 +62,5 @@ def main(page: ft.Page):
     )
     page.update()
 
-    devices = audio_rec.get_input_devices()
-    print(devices)
 
 ft.app(main)
