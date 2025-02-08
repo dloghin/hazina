@@ -1,5 +1,6 @@
-# hazina
-Hazina - Smart Crypto Wallet with AI Agents
+![logo](assets/banner.png)
+
+# Hazina - Smart Crypto Wallet with AI Agents
 
 ## How to Run
 
