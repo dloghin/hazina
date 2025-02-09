@@ -3,6 +3,7 @@
 import asyncio
 import os
 import random
+from trader import run_trader_ollama
 from telegram_bot import connect_to_telegram
 from encryptions import decrypt, encrypt
 from passwords import check_new_password, check_password, hash_password
@@ -21,6 +22,7 @@ from openai import OpenAI
 
 openai_client = None
 sound_on = True
+in_auto_mode = False
 
 class Message:
     def __init__(self, user_name: str, text: str, message_type: str):
@@ -131,8 +133,11 @@ def main(page: ft.Page):
             auth_user.error_text = "Incorrect password!"
             auth_user.update()
         else:
-            plain_password = set_plain_password(page, auth_user.value)
+            auth_user.disabled = True
             welcome_dlg.open = False
+            page.update()
+
+            plain_password = set_plain_password(page, auth_user.value)
             # if we have the API keys, initialize the agent
             if not (
                 hazina_config.cdp_api_key_name is None
@@ -210,6 +215,10 @@ def main(page: ft.Page):
             keys_dlg.open = False
             page.update()
 
+    def show_trader_message(message):
+        publish_message(page, message, agent_name, with_audio=False)
+        page.update()
+
     def send_message_click(e):
         if new_message.value != "":
             message = new_message.value
@@ -224,9 +233,12 @@ def main(page: ft.Page):
             new_message.focus()
             page.update()
 
-            responses = get_agent_response(message)
-            for response in responses:
-                publish_message(page, response, agent_name)
+            if message == "run in autonomous mode":
+                asyncio.run(run_trader_ollama(show_trader_message))
+            else:
+                responses = get_agent_response(message)
+                for response in responses:
+                    publish_message(page, response, agent_name)
 
     def on_message(message: Message):
         if message.message_type == "chat_message":
@@ -278,6 +290,7 @@ def main(page: ft.Page):
             autofocus=True,
             password=True,
             can_reveal_password=True,
+            on_submit=click_auth,
         )
         welcome_dlg = ft.AlertDialog(
             open=True,
@@ -345,6 +358,20 @@ def main(page: ft.Page):
             btn_sound.icon = ft.Icons.VOLUME_UP
         page.update()
 
+    def change_mode_option(e):
+        global in_auto_mode
+        if in_auto_mode:
+            in_auto_mode = False
+            txt_mode.value = "User Mode"
+            btn_mode.icon = ft.Icons.PERSON
+        else:
+            in_auto_mode = True
+            txt_mode.value = "Autonomous Mode"
+            btn_mode.icon = ft.Icons.AUTO_MODE
+            publish_message(page, "Starting Autonomous Mode", agent_name)
+            asyncio.run(run_trader_ollama(show_trader_message))
+        page.update()
+
     page.theme_mode = ft.ThemeMode.LIGHT
     def change_theme(e):
         if page.theme_mode == ft.ThemeMode.LIGHT:
@@ -363,6 +390,7 @@ def main(page: ft.Page):
     txt_telegram = ft.Text(value="Not Connected with Telegram")
     txt_theme = ft.Text(value="Light Theme")
     txt_sound = ft.Text(value="With Sound")
+    txt_mode = ft.Text(value="User Mode")
 
     btn_telegram = ft.IconButton(
         icon=ft.Icons.TELEGRAM,
@@ -380,6 +408,11 @@ def main(page: ft.Page):
         icon_size=40,
         on_click=change_theme,
     )
+    btn_mode = ft.IconButton(
+        icon=ft.Icons.PERSON,
+        icon_size=40,
+        on_click=change_mode_option
+    )
 
     # Add everything to the page
     page.add(
@@ -391,6 +424,8 @@ def main(page: ft.Page):
                 txt_wallet_balance,
                 ft.Icon(ft.Icons.NETWORK_CHECK, size=30),
                 txt_network,
+                btn_mode,
+                txt_mode,
                 btn_telegram,
                 txt_telegram,
                 btn_sound,
