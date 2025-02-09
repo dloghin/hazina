@@ -44,6 +44,11 @@ async def run_trader_ollama(callback=None):
     eth_run(env, '', [], starting_state, args=args, callback=callback)
 
 
+async def run_trader_autonome(callback=None):
+    # TBD - connect to the container running in Autonome
+    print("to be implemented")
+
+
 def stop_trader():
     set_done()
 

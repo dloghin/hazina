@@ -448,6 +448,7 @@ def main(page: ft.Page):
         options=[
             ft.dropdown.Option("Ollama"),
             ft.dropdown.Option("OpenAI"),
+            ft.dropdown.Option("Autonome"),
         ],
         value="Ollama" if use_ollama else "OpenAI",
         on_change=change_model_option,
