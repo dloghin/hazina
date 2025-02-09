@@ -20,6 +20,8 @@ Word meaning: _"hazina"_ is derived from [_"hazna"_](https://en.wiktionary.org/w
 
 ## How to Run
 
+First, install all the [prerequisites](#prerequisites). Then:
+
 ```
 python -m venv .venv
 pip install -r requirments.txt
@@ -30,7 +32,7 @@ flet run app.py
 flet run --web app.py
 ```
 
-## Prerequisite
+## Prerequisites
 
 Note: this is not an exhaustive list. Depending on your system, you may need to install some packages.
 
