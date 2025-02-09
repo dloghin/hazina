@@ -6,11 +6,15 @@ from CryptoTrade.eth_env import ETHTradingEnv
 from CryptoTrade.eth_trial import eth_run
 from CryptoTrade.run_agent import get_parser
 
+def print_msg(msg):
+    print("{}".format(msg))
 
-def test_run_opneai():
-    api_key = dotenv.get_key(".env", "OPENAI_API_KEY")
+
+def run_trader_openai(callback=None, api_key=None):
     if not api_key:
-        raise ValueError("OPENAI_API_KEY is not set")
+        api_key = dotenv.get_key(".env", "OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is not set")
 
     parser = get_parser()
     args = parser.parse_args()
@@ -21,15 +25,12 @@ def test_run_opneai():
     args.ending_date = "2023-12-01"
     args.openai_key = api_key
 
-    def print_msg(msg):
-        print("{}".format(msg))
-
     env = ETHTradingEnv(args)
     starting_state, reward, done, info = env.reset()
-    eth_run(env, '', [], starting_state, args=args, callback=print_msg)
+    eth_run(env, '', [], starting_state, args=args, callback=callback)
 
 
-def test_run_ollama():
+def run_trader_ollama(callback=None):
     parser = get_parser()
     args = parser.parse_args()
     args.dataset = "eth"
@@ -38,13 +39,10 @@ def test_run_ollama():
     args.starting_date = "2023-10-01"
     args.ending_date = "2023-12-01"
 
-    def print_msg(msg):
-        print("{}".format(msg))
-
     env = ETHTradingEnv(args)
     starting_state, reward, done, info = env.reset()
-    eth_run(env, '', [], starting_state, args=args, callback=print_msg)
+    eth_run(env, '', [], starting_state, args=args, callback=callback)
 
 
 if __name__ == '__main__':
-    test_run_ollama()
+    run_trader_ollama(print_msg)
