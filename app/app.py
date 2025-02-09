@@ -3,7 +3,7 @@
 import asyncio
 import os
 import random
-from trader import run_trader_ollama
+from trader import run_trader_ollama, run_trader_openai, stop_trader
 from telegram_bot import connect_to_telegram
 from encryptions import decrypt, encrypt
 from passwords import check_new_password, check_password, hash_password
@@ -23,6 +23,7 @@ from openai import OpenAI
 openai_client = None
 sound_on = True
 in_auto_mode = False
+use_ollama = True
 
 class Message:
     def __init__(self, user_name: str, text: str, message_type: str):
@@ -80,13 +81,22 @@ class ChatMessage(ft.Row):
         return colors_lookup[hash(user_name) % len(colors_lookup)]
 
 
+def set_plain_password(page: ft.Page, plain_password: str):
+    page.session.set("plain_password", plain_password)
+    return plain_password
+
+
 def get_plain_password(page: ft.Page):
     return page.session.get("plain_password")
 
 
-def set_plain_password(page: ft.Page, plain_password: str):
-    page.session.set("plain_password", plain_password)
-    return plain_password
+def set_openai_key(page: ft.Page, openai_key: str):
+    page.session.set("openai_key", openai_key)
+    return openai_key
+
+
+def get_openai_key(page: ft.Page):
+    return page.session.get("openai_key")
 
 
 def play_sound(page: ft.Page, message: str):
@@ -116,9 +126,19 @@ def publish_message(page: ft.Page, message: str, name: str, with_audio: bool = T
         play_sound(page, message)
 
 
+def run_trader(callback, page: ft.Page, agent_name: str):
+    if use_ollama:
+        publish_message(page, "Starting Autonomous Mode with Ollama", agent_name)
+        asyncio.run(run_trader_ollama(callback))
+    else:
+        publish_message(page, "Starting Autonomous Mode with OpenAI", agent_name)
+        asyncio.run(run_trader_openai(callback, get_openai_key(page)))
+
+
 def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
     page.title = "Hazina - Smart Crypto Wallet with AI Agents"
+    page.window.width = 1400
 
     hazina_config = load_hazina_config()
 
@@ -147,6 +167,7 @@ def main(page: ft.Page):
                 cdpkn = decrypt(plain_password, hazina_config.cdp_api_key_name)
                 cdppk = decrypt(plain_password, hazina_config.cdp_api_key_private_key)
                 oaik = decrypt(plain_password, hazina_config.openai_api_key)
+                set_openai_key(page, oaik)
                 initialize_agent(
                     cdp_api_key_name=cdpkn,
                     cdp_api_key_private_key=cdppk,
@@ -234,7 +255,7 @@ def main(page: ft.Page):
             page.update()
 
             if message == "run in autonomous mode":
-                asyncio.run(run_trader_ollama(show_trader_message))
+                run_trader(show_trader_message, page, agent_name)
             else:
                 responses = get_agent_response(message)
                 for response in responses:
@@ -364,12 +385,12 @@ def main(page: ft.Page):
             in_auto_mode = False
             txt_mode.value = "User Mode"
             btn_mode.icon = ft.Icons.PERSON
+            stop_trader()
         else:
             in_auto_mode = True
             txt_mode.value = "Autonomous Mode"
             btn_mode.icon = ft.Icons.AUTO_MODE
-            publish_message(page, "Starting Autonomous Mode", agent_name)
-            asyncio.run(run_trader_ollama(show_trader_message))
+            run_trader(show_trader_message, page, agent_name)
         page.update()
 
     page.theme_mode = ft.ThemeMode.LIGHT
@@ -414,18 +435,38 @@ def main(page: ft.Page):
         on_click=change_mode_option
     )
 
+    global use_ollama
+    def change_model_option(e):
+        global use_ollama
+        if dd_models.value == "OpenAI":
+            use_ollama = False
+        else:
+            use_ollama = True
+
+    dd_models = ft.Dropdown(
+        width=100,
+        options=[
+            ft.dropdown.Option("Ollama"),
+            ft.dropdown.Option("OpenAI"),
+        ],
+        value="Ollama" if use_ollama else "OpenAI",
+        on_change=change_model_option,
+    )
+
     # Add everything to the page
     page.add(
         ft.Row(
             [
-                ft.Icon(ft.Icons.WALLET, size=30),
+                ft.Icon(ft.Icons.WALLET, size=40),
                 txt_wallet_address,
-                ft.Icon(ft.Icons.BALANCE, size=30),
+                ft.Icon(ft.Icons.BALANCE, size=40),
                 txt_wallet_balance,
-                ft.Icon(ft.Icons.NETWORK_CHECK, size=30),
+                ft.Icon(ft.Icons.NETWORK_CHECK, size=40),
                 txt_network,
                 btn_mode,
                 txt_mode,
+                ft.Icon(ft.Icons.MODEL_TRAINING, size=40),
+                dd_models,
                 btn_telegram,
                 txt_telegram,
                 btn_sound,

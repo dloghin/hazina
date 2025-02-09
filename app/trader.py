@@ -3,14 +3,14 @@ import sys
 import dotenv
 # sys.path.append('../CryptoTrade')
 from CryptoTrade.eth_env import ETHTradingEnv
-from CryptoTrade.eth_trial import eth_run
+from CryptoTrade.eth_trial import eth_run, set_done
 from CryptoTrade.run_agent import get_parser
 
 def print_msg(msg):
     print("{}".format(msg))
 
 
-def run_trader_openai(callback=None, api_key=None):
+async def run_trader_openai(callback=None, api_key=None):
     if not api_key:
         api_key = dotenv.get_key(".env", "OPENAI_API_KEY")
         if not api_key:
@@ -30,7 +30,7 @@ def run_trader_openai(callback=None, api_key=None):
     eth_run(env, '', [], starting_state, args=args, callback=callback)
 
 
-def run_trader_ollama(callback=None):
+async def run_trader_ollama(callback=None):
     parser = get_parser()
     args = parser.parse_args()
     args.dataset = "eth"
@@ -42,6 +42,10 @@ def run_trader_ollama(callback=None):
     env = ETHTradingEnv(args)
     starting_state, reward, done, info = env.reset()
     eth_run(env, '', [], starting_state, args=args, callback=callback)
+
+
+def stop_trader():
+    set_done()
 
 
 if __name__ == '__main__':
