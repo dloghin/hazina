@@ -53,4 +53,4 @@ def get_messages_ep():
     return json.dumps({"success": True, "data": pop_messages()}), 201
 
 if __name__ == '__main__':
-    api.run()
+    api.run(host='0.0.0.0')
