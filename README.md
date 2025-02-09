@@ -24,7 +24,7 @@ First, install all the [prerequisites](#prerequisites). Then:
 
 ```
 python -m venv .venv
-pip install -r requirments.txt
+pip install -r requirements.txt
 cd app
 # to run as local app
 flet run app.py
@@ -64,8 +64,8 @@ sudo ln -s /usr/lib/x86_64-linux-gnu/libmpv.so /usr/lib/libmpv.so.1
 ```
 brew install pkg-config
 export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-# then run pip install -r requirments.txt
-pip install -r requirments.txt
+# then run pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## License
