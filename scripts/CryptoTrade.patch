@@ -1,0 +1,627 @@
+diff --git a/eth_env.py b/eth_env.py
+index f02561b..ddd93c1 100644
+--- a/eth_env.py
++++ b/eth_env.py
+@@ -27,7 +27,7 @@ def get_paths(args):
+     timecol_dict = {'eth': 'snapped_at', 'btc': 'timeOpen', 'sol': 'timeOpen'}
+     price_timefmt_dict = {'eth': "%Y-%m-%d %H:%M:%S UTC", 'btc': "%Y-%m-%dT%H:%M:%S.%fZ", 'sol': "%Y-%m-%dT%H:%M:%S.%fZ"}
+     txn_timefmt_dict = {'eth': "%d/%m/%y %H:%M", 'btc': "%Y-%m-%d %H:%M:%S.%f UTC", 'sol': "%Y-%m-%d %H:%M:%S.%f UTC"}
+-    return f'data/{price_dict[dataset]}', f'data/{txn_dict[dataset]}', f'data/{news_dict[dataset]}', timecol_dict[dataset], price_timefmt_dict[dataset], txn_timefmt_dict[dataset]
++    return f'CryptoTrade/data/{price_dict[dataset]}', f'CryptoTrade/data/{txn_dict[dataset]}', f'CryptoTrade/data/{news_dict[dataset]}', timecol_dict[dataset], price_timefmt_dict[dataset], txn_timefmt_dict[dataset]
+ 
+ 
+ class ETHTradingEnv:
+@@ -37,7 +37,7 @@ class ETHTradingEnv:
+         df = pd.read_csv(price_path)
+         df = df.sort_values(self.timecol)
+         df['date'] = pd.to_datetime(df[self.timecol], format=self.price_timefmt)
+-        
++
+         # SMA
+         for period in SMA_PERIODS:
+             df[f'SMA_{period}'] = df['open'].rolling(window=period).mean()
+@@ -48,7 +48,7 @@ class ETHTradingEnv:
+         df['MACD'] = df['EMA_12'] - df['EMA_26']
+         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+         self.data = df[(df['date'] >= starting_date) & (df['date'] <= ending_date)]  # only use ending_date for open price
+-        
++
+         self.txn_stat = pd.read_csv(txn_path).sort_values('day')
+         self.txn_stat['date'] = pd.to_datetime(self.txn_stat['day'], format=txn_timefmt)
+         self.total_steps = len(self.data)
+@@ -81,7 +81,7 @@ class ETHTradingEnv:
+             slma_signal = 'sell'
+         elif short_ma < long_ma:
+             slma_signal = 'buy'
+-        
++
+         sma = next_day[f'SMA_20']
+         sd = next_day[f'STD_20']
+         multiplier = 2
+@@ -122,7 +122,7 @@ class ETHTradingEnv:
+                     item = {k: loaded_item[k] for k in ['id', 'time', 'title', 'content']}  # omit url
+                     K = 5000  # clip characters
+                     if len(item['content']) > K:
+-                        item['content'] = item['content'][:K] + '...' 
++                        item['content'] = item['content'][:K] + '...'
+                     news.append(item)
+                     seen_titles.add(item['title'])
+ 
+@@ -166,12 +166,12 @@ class ETHTradingEnv:
+     # action: buy, sell, or hold
+     # new state: today's news, tomorrow's open price, cash, held ETH
+     # new reward: today's profit
+-    def step(self, action):
++    def step(self, action, callback = None):
+         raw_action = action
+         if type(action) == str:
+             # actions = re.findall(r"[-+]?\d*\.\d+|\d+", action)
+             actions = re.findall(r"-?(?:0(?:\.\d{1})|1\.0)", action)
+-            
++
+             if len(actions) == 0:
+                 print(f'ERROR: Invalid llm response: {action}. Set to no action.')
+                 action = 0.00
+@@ -181,7 +181,7 @@ class ETHTradingEnv:
+                 # print(f'Multiple actions in llm response: {action}. Pick one action.')
+                 # action = float(actions[0])
+                 action = float(actions[-1])
+-        
++
+         if not -1 <= action <= 1:
+             print(f"ERROR: Invalid action: {action}. Set to no action.")
+             action = 0.00
+@@ -190,20 +190,26 @@ class ETHTradingEnv:
+         next_day = self.data.iloc[self.current_step + 1]
+         open_price = today['open']
+         next_open_price = next_day['open']  # assume today's close = next day's open
+-        
++
+         if -1 <= action < 0 and self.eth_held > 0:  # -1 sell
+             eth_diff = abs(action) * self.eth_held
+             cash_diff = eth_diff * open_price
+             self.eth_held -= eth_diff
+             self.cash += cash_diff
+             self.cash -= GAS_FEE * open_price + cash_diff * EX_RATE
++            if callback is not None:
++                message = f'Sell {eth_diff} ETH for {cash_diff} cash.'
++                callback(message)
+         if 0 < action <= 1 and self.cash > 0:  # 1 buy
+             cash_diff = abs(action) * self.cash
+             eth_diff = cash_diff / open_price
+             self.cash -= cash_diff
+             self.eth_held += eth_diff
+             self.cash -= GAS_FEE * open_price + cash_diff * EX_RATE
+-        
++            if callback is not None:
++                message = f'Buy {eth_diff} ETH for {cash_diff} cash.'
++                callback(message)
++
+         self.current_step += 1
+         if self.current_step >= self.total_steps - 1:
+             self.done = True
+@@ -219,6 +225,6 @@ class ETHTradingEnv:
+             'today': today[self.timecol],
+         }
+         return close_state, reward, self.done, info
+-    
++
+     def close(self):
+         pass
+diff --git a/eth_trial.py b/eth_trial.py
+index 17273b1..5696ed7 100644
+--- a/eth_trial.py
++++ b/eth_trial.py
+@@ -8,15 +8,17 @@ import openai
+ import numpy as np
+ import time
+ import importlib
+-from utils import Model, get_chat
+-from eth_env import ETHTradingEnv
+-from env_history import EnvironmentHistory
++from CryptoTrade.utils import get_chat
++from CryptoTrade.eth_env import ETHTradingEnv
++from CryptoTrade.env_history import EnvironmentHistory
+ 
+ from typing import List, Dict, Any, Tuple
+- 
+-def llm(prompt, model, seed):
++
++log_file = None
++
++def llm(prompt, model, seed, api_key = None):
+     try:
+-        text = get_chat(prompt=prompt, model=model, seed=seed)  # stop_strs=['\n']
++        text = get_chat(prompt=prompt, model=model, seed=seed, api_key=api_key)  # stop_strs=['\n']
+         return text
+     except Exception as e:
+         print(prompt)
+@@ -24,7 +26,7 @@ def llm(prompt, model, seed):
+         import sys
+         sys.exit(1)
+ 
+-def debug_print(s, response=None, title=''):
++def debug_print_stdout(s, response=None, title=''):
+     print(f'\n*** START {title} ***')
+     print(s)
+     if response is not None:
+@@ -32,10 +34,22 @@ def debug_print(s, response=None, title=''):
+         print(response)
+     print(f'*** END {title} ***\n')
+ 
+-def eth_run(env, base_prompt, memory, starting_state, args):
++def debug_print(s, response=None, title=''):
++    global log_file
++    log_file.write(f'\n*** START {title} ***')
++    log_file.write("{}".format(s))
++    if response is not None:
++        log_file.write(f'*** {title} RESPONSE ***')
++        log_file.write(response)
++    log_file.write(f'*** END {title} ***\n')
++
++def eth_run(env, base_prompt, memory, starting_state, args, callback = None):
++    global log_file
+     to_print = args.to_print
+     model = args.model
+     seed = args.seed
++    if to_print:
++        log_file = open(".trader.log", "w")
+ 
+     if len(memory) > 3:
+         env_history = EnvironmentHistory(base_prompt, starting_state, memory[-3:], [], args)
+@@ -52,31 +66,30 @@ def eth_run(env, base_prompt, memory, starting_state, args):
+         use_reflection = args.use_reflection
+         price_s, news_s, reflection_s, template_s = env_history.get_prompt()
+ 
+-        onchain_analysis = llm(price_s, model, seed).strip()
++        onchain_analysis = llm(price_s, model, seed, api_key=args.openai_key).strip()
+         if to_print:
+-            print(f"********* START STEP {cur_step} *********")
+             debug_print(price_s, onchain_analysis, 'ONCHAIN ANALYST')
+ 
+         if use_news:
+-            news_analysis = llm(news_s, model, seed).strip()
++            news_analysis = llm(news_s, model, seed,api_key=args.openai_key).strip()
+             if to_print:
+                 debug_print(news_s, news_analysis, 'NEWS ANALYST')
+         else:
+             news_analysis = 'N/A'
+ 
+         if use_reflection:
+-            reflection = llm(reflection_s, model, seed).strip()
++            reflection = llm(reflection_s, model, seed, api_key=args.openai_key).strip()
+             if to_print:
+                 debug_print(reflection_s, reflection, 'REFLECTION ANALYST')
+         else:
+             reflection = 'N/A'
+ 
+         trader_prompt = template_s.format(onchain_analysis, news_analysis, reflection)
+-        trader_response = llm(trader_prompt, model, seed).strip()
++        trader_response = llm(trader_prompt, model, seed, api_key=args.openai_key).strip()
+         if to_print:
+             debug_print(trader_prompt, trader_response, 'TRADER')
+ 
+-        state, reward, done, info = env.step(trader_response)
++        state, reward, done, info = env.step(trader_response, callback)
+         raw_action = info['raw_action']
+         actual_action = f"{info['actual_action']:.1f}"
+         env_history.add("trader_response", trader_response)
+@@ -87,19 +100,24 @@ def eth_run(env, base_prompt, memory, starting_state, args):
+             print_state = {k: v for k, v in state.items() if k != 'news'}
+             debug_print(actual_action, None, 'ACTUAL ACTION')
+             debug_print(print_state, None, 'STATE')
+-            
++
+             total_return = state['roi']
+             tmp_returns = np.array(returns) * 100
+             return_mean = np.mean(tmp_returns)
+             return_std = np.std(tmp_returns)
+             risk_free_rate = 0  # same as sociodojo
+-            sharpe_ratio = (return_mean - risk_free_rate) / return_std
++            sharpe_ratio = 0.0 if return_std == 0.0 else (return_mean - risk_free_rate) / return_std
+             daily_result = f'Total return: {total_return*100:.2f}, sharpe ratio: {sharpe_ratio:.2f}, daily return mean: {return_mean:.2f}, daily return std: {return_std:.2f}'
+             debug_print(daily_result, None, 'CURRENT RESULT')
++            if callback is not None:
++                msg = f'Day {cur_step}: cash {state['cash']}, ETH {state['eth_held']}.'
++                callback(msg)
+ 
+         cur_step += 1
+         time.sleep(1)
+     is_success = total_return > 0.1 # modify sucess condition
++    if to_print:
++        log_file.close()
+     return env_history, is_success
+ 
+ def run_trial(
+diff --git a/generate_reflections.py b/generate_reflections.py
+index 9802f24..5c3f83a 100644
+--- a/generate_reflections.py
++++ b/generate_reflections.py
+@@ -1,4 +1,4 @@
+-from utils import get_chat
++from CryptoTrade.utils import get_chat
+ 
+ from typing import List, Dict, Any
+ 
+@@ -23,7 +23,7 @@ def update_memory(trial_log_path: str, env_configs: List[Dict[str, Any]]) -> Lis
+     """Updates the given env_config with the appropriate reflections."""
+     with open(trial_log_path, 'r') as f:
+         full_log: str = f.read()
+-        
++
+     env_logs: List[str] = full_log.split('#####\n\n#####')
+     assert len(env_logs) == len(env_configs), print(f'bad: {len(env_logs)}, {len(env_configs)}')
+     for i, env in enumerate(env_configs):
+@@ -36,5 +36,5 @@ def update_memory(trial_log_path: str, env_configs: List[Dict[str, Any]]) -> Lis
+             reflection_query: str = _generate_reflection_query(env_logs[i], memory)
+             reflection: str = get_chat(prompt=reflection_query, model='gpt-3.5-turbo') # type: ignore  # DEBUG check
+             env_configs[i]['memory'] += [reflection]
+-                
++
+     return env_configs
+diff --git a/run_agent.py b/run_agent.py
+index 9847904..e5d53ef 100644
+--- a/run_agent.py
++++ b/run_agent.py
+@@ -2,8 +2,8 @@ import os
+ import json
+ import argparse
+ 
+-from eth_trial import run_trial
+-from generate_reflections import update_memory
++from CryptoTrade.eth_trial import run_trial
++from CryptoTrade.generate_reflections import update_memory
+ 
+ from typing import Any, List, Dict
+ 
+@@ -31,6 +31,7 @@ def get_parser():
+     parser.add_argument("--num_envs", type=int, default=1, help="The number of environments per trial")
+     parser.add_argument("--run_name", type=str, default='eth_run', help="The name of the run")
+     parser.add_argument("--is_resume", action='store_true', help="To resume run")
++    parser.add_argument("--openai_key", action='store_true', help="OpenAI API key")
+     return parser
+ 
+ def main(args) -> None:
+@@ -62,7 +63,7 @@ def main(args) -> None:
+                 'is_success': False,
+                 'skip': False
+             }]
+-    
++
+     world_log_path: str = os.path.join(logging_dir, 'world.log')
+ 
+     # run trials
+diff --git a/run_agent.sh b/run_agent.sh
+old mode 100644
+new mode 100755
+diff --git a/run_baseline.py b/run_baseline.py
+index c471860..e6f2a23 100644
+--- a/run_baseline.py
++++ b/run_baseline.py
+@@ -82,15 +82,15 @@ class LSTMModel(nn.Module):
+         super(LSTMModel, self).__init__()
+         self.hidden_dim = hidden_dim
+         self.num_layers = num_layers
+-        
++
+         self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
+         self.fc = nn.Linear(hidden_dim, output_dim)
+-        
++
+     def forward(self, x):
+         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_().to(x.device)
+         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_().to(x.device)
+         out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
+-        out = self.fc(out[:, -1, :]) 
++        out = self.fc(out[:, -1, :])
+         return out
+ 
+ # # LSTM strategy function
+@@ -98,33 +98,33 @@ class LSTMModel(nn.Module):
+ #     # Filter the data
+ #     data = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
+ #     data = data['open'].values.reshape(-1, 1)
+-    
++
+ #     # Scale the data
+ #     scaler = MinMaxScaler(feature_range=(0, 1))
+ #     data_scaled = scaler.fit_transform(data)
+-    
++
+ #     # Create the dataset
+ #     X, Y = create_dataset(data_scaled, look_back)
+ #     # dataset = TensorDataset(X, Y)
+-    
+-    
++
++
+ #     # Reshape X for sklearn compatibility
+ #     X = X.reshape(X.shape[0], look_back)
+-    
++
+ #     # Split the data into training and test sets
+ #     train_size = int(len(X) * 0.67)
+ #     trainX, trainY = X[:train_size], Y[:train_size]
+-    
++
+ #     # Define and train the linear regression model
+ #     model = LinearRegression()
+ #     model.fit(trainX, trainY)
+-    
++
+ #     # Make predictions
+ #     last_train_batch = trainX[-1:].reshape(1, look_back)
+ #     next_day_prediction = model.predict(last_train_batch)
+ #     next_day_prediction = scaler.inverse_transform(next_day_prediction.reshape(-1, 1))
+ #     current_price = scaler.inverse_transform(trainY[-1].reshape(-1, 1))
+-    
++
+ #     # Decide action based on prediction, buy, sell or hold
+ #     if next_day_prediction > current_price:
+ #         action = 'Buy'
+@@ -132,15 +132,15 @@ class LSTMModel(nn.Module):
+ #         action = 'Sell'
+ #     else:
+ #         action = 0
+-    
++
+ #     return action
+ 
+- 
++
+ def lstm_strategy(df, start_date, end_date, look_back=5):
+     # Filter the data
+     data = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
+     data = data['open'].values.reshape(-1, 1)
+-    
++
+     # Scale the data
+     scaler = MinMaxScaler(feature_range=(0, 1))
+     data_scaled = scaler.fit_transform(data)
+@@ -164,10 +164,10 @@ def lstm_strategy(df, start_date, end_date, look_back=5):
+             loss = criterion(outputs, targets)
+             loss.backward()
+             optimizer.step()
+-        
++
+         if epoch % 10 == 0:
+-            print(f'Epoch {epoch}, Loss: {loss.item()}')    
+-            
++            print(f'Epoch {epoch}, Loss: {loss.item()}')
++
+     # Prepare the last training batch for prediction
+     last_sequence = data_scaled[-look_back:]  # Get the last 'look_back' sequences
+     last_sequence = torch.tensor(last_sequence, dtype=torch.float32).unsqueeze(0).to(device)  # Add batch dimension
+@@ -190,7 +190,7 @@ def lstm_strategy(df, start_date, end_date, look_back=5):
+ 
+     return action
+ 
+-# 1st strategy: Simple MA 
++# 1st strategy: Simple MA
+ # when the asset's open price is below the its SMA, and the volume is above the its SMA it's a buying signal, and vice versa for selling.
+ 
+ # 2nd strategy: MACD
+@@ -200,14 +200,14 @@ def lstm_strategy(df, start_date, end_date, look_back=5):
+ 
+ # 3rd strategy: short and long strategy (SLMA) - If the short period SMA is below the long period SMA, it means that the trend is going down, so it's a sell signal, it's also known as the death cross.
+ # Otherwise, the trend is shiftting up, and it's a buy signal, it's also called the golden cross.
+-    
++
+ # 4th strategy: Bollinger Bands
+ 
+ 
+ 
+ 
+ def run_strategy(strategy, sargs):
+-    env = ETHTradingEnv(Namespace(starting_date=sargs['starting_date'], ending_date=sargs['ending_date']))
++    env = ETHTradingEnv(Namespace(dataset='eth', starting_date=sargs['starting_date'], ending_date=sargs['ending_date']))
+     df_tmp = df[(df['date'] >= sargs['starting_date']) & (df['date'] <= sargs['ending_date'])]
+     df_tmp.reset_index(drop=True, inplace=True)
+     state, reward, done, info = env.reset()  # only use env to act and track profit
+@@ -240,7 +240,7 @@ def run_strategy(strategy, sargs):
+             elif open_price < row[sma_column]:  # death cross?
+                 # current_signal = 'buy'
+                 current_signal = 'sell'
+-                
++
+             action = 0
+             # if current_signal != previous_signal:
+             if True:
+@@ -249,7 +249,7 @@ def run_strategy(strategy, sargs):
+                 elif current_signal == 'sell' and eth_held > 0:
+                     action = SELL
+             previous_signal = current_signal
+-                
++
+         elif strategy == 'SLMA':
+             short = sargs['short']
+             long = sargs['long']
+@@ -289,7 +289,7 @@ def run_strategy(strategy, sargs):
+             multiplier = sargs['multiplier']  # Commonly set to 2
+             sma = row[f'SMA_{period}']
+             sd = row[f'STD_{period}']
+-            
++
+             upper_band = sma + (sd * multiplier)
+             lower_band = sma - (sd * multiplier)
+ 
+@@ -312,7 +312,7 @@ def run_strategy(strategy, sargs):
+             action = 0
+             if cash > 0:
+                 action = FULL_BUY
+-        
++
+         # here to add LSTM strategy
+         elif strategy == 'LSTM':
+             action = lstm_strategy(df, sargs['starting_date'], sargs['ending_date'], look_back=5)
+@@ -350,7 +350,7 @@ def run_strategy(strategy, sargs):
+     }
+     result_str = f'Total IRR: {total_irr*100:.2f} %, Sharp Ratio: {result["sharp_ratio"]:.2f}'
+     print(result_str)
+-    
++
+ 
+ # strategy = 'LSTM'
+ # print(strategy)
+diff --git a/utils.py b/utils.py
+index 501f595..6067d71 100644
+--- a/utils.py
++++ b/utils.py
+@@ -1,49 +1,107 @@
+ import os
+ import sys
+ from openai import OpenAI
+-
+-api_key = os.getenv('OPENAI_API_KEY')
+-api_base = os.getenv('OPENAI_API_BASE')
+-# client = OpenAI(api_key=api_key, base_url=api_base)
+-client = OpenAI(api_key=api_key)
+-
++from ollama import chat
++from ollama import ChatResponse
+ 
+ from tenacity import (
+     retry,
+-    stop_after_attempt, # type: ignore
+-    wait_random_exponential, # type: ignore
++    stop_after_attempt,  # type: ignore
++    wait_random_exponential,  # type: ignore
+ )
+ 
+ from typing import Optional, List
++
+ if sys.version_info >= (3, 8):
+     from typing import Literal
+ else:
+     from typing_extensions import Literal
+ 
+ 
+-Model = Literal["gpt-4", "gpt-3.5-turbo"]
++def get_chat(
++    prompt,
++    model,
++    seed,
++    temperature=0.0,
++    max_tokens=256,
++    stop_strs=None,
++    is_batched=False,
++    debug=False,
++    api_key=None,
++):
++    if model in ["llama3.2", "deepseek-r1"]:
++        return get_chat_ollama(
++            prompt,
++            model,
++            seed,
++            temperature=temperature,
++            max_tokens=max_tokens,
++            stop_strs=stop_strs,
++            is_batched=is_batched,
++            debug=debug,
++        )
++    else:
++        return get_chat_openai(
++            prompt,
++            model,
++            seed,
++            temperature=temperature,
++            max_tokens=max_tokens,
++            stop_strs=stop_strs,
++            is_batched=is_batched,
++            debug=debug,
++            api_key=api_key,
++        )
++
+ 
+ @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+-def get_chat(prompt, model, seed, temperature=0.0, max_tokens=256, stop_strs=None, is_batched=False, debug=False):
+-    messages = [
+-        {
+-            "role": "user",
+-            "content": prompt
+-        }
+-    ]
+-    response = client.chat.completions.create(model=model,
+-    messages=messages,
+-    # max_tokens=max_tokens,
+-    # stop=stop_strs,
+-    seed=seed,
+-    temperature=temperature)
++def get_chat_openai(
++    prompt,
++    model,
++    seed,
++    temperature=0.0,
++    max_tokens=256,
++    stop_strs=None,
++    is_batched=False,
++    debug=False,
++    api_key=None,
++):
++    client = OpenAI(api_key=api_key)
++
++    messages = [{"role": "user", "content": prompt}]
++    response = client.chat.completions.create(
++        model=model,
++        messages=messages,
++        # max_tokens=max_tokens,
++        # stop=stop_strs,
++        seed=seed,
++        temperature=temperature,
++    )
+     if debug:
+         print(response.system_fingerprint)
+     return response.choices[0].message.content
+ 
+ 
++def get_chat_ollama(
++    prompt,
++    model,
++    seed,
++    temperature=0.0,
++    max_tokens=256,
++    stop_strs=None,
++    is_batched=False,
++    debug=False,
++):
++    messages = [{"role": "user", "content": prompt}]
++    response: ChatResponse = chat(
++        model=model,
++        messages=messages
++    )
++    if debug:
++        print(response["message"]["content"])
++    return response["message"]["content"]
++
+ if __name__ == "__main__":
+-    print(client.api_key[-4:])
+ 
+     # response = client.chat.completions.create(
+     # model="gpt-3.5-turbo",
+@@ -55,5 +113,25 @@ if __name__ == "__main__":
+ 
+     # print(response.choices[0].message.content)
+ 
+-    response = get_chat("You are a poetic assistant, skilled in explaining complex programming concepts with creative flair. Compose a poem that explains the concept of recursion in programming.", "gpt-3.5-turbo", 6216, debug=True)
++    # response = get_chat(
++    #    "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair. Compose a poem that explains the concept of recursion in programming.",
++    #    "gpt-3.5-turbo",
++    #    6216,
++    #    debug=True,
++    #)
++
++    response = get_chat_ollama(
++        "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair. Compose a poem that explains the concept of recursion in programming.",
++        "llama3.2",
++        0,
++        debug=True,
++    )
++    print(response)
++
++    response = get_chat_ollama(
++        "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair. Compose a poem that explains the concept of recursion in programming.",
++        "deepseek-r1",
++        0,
++        debug=True,
++    )
+     print(response)
