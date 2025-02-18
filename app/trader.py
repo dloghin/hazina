@@ -1,3 +1,4 @@
+import asyncio
 import sys
 
 import dotenv
@@ -54,4 +55,4 @@ def stop_trader():
 
 
 if __name__ == '__main__':
-    run_trader_ollama(print_msg)
+    asyncio.run(run_trader_ollama(print_msg))
