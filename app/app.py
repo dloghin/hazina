@@ -454,6 +454,12 @@ def main(page: ft.Page):
         on_change=change_model_option,
     )
 
+    
+    bg_image = ft.Image(
+        image_src=f"/home/ubuntu/git/ct/hazina/assets/banner.png",
+        image_opacity=0.3,      # Opacity value should be between 0.0 (completely transparent) and 1.0 (not transparent).
+    )
+
     # Add everything to the page
     page.add(
         ft.Row(
@@ -482,8 +488,7 @@ def main(page: ft.Page):
             border_radius=5,
             padding=10,
             expand=True,
-            image_src=f"/home/ubuntu/git/ct/hazina/assets/banner.png",
-            image_opacity=0.3,      # Opacity value should be between 0.0 (completely transparent) and 1.0 (not transparent).
+
         ),
         ft.Row(
             [

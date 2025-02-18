@@ -61,6 +61,9 @@ sudo ln -s /usr/lib/x86_64-linux-gnu/libmpv.so /usr/lib/libmpv.so.1
 
 ### On MacOS
 
+Install [Ollama](https://ollama.com/download) for macOS.
+
+Then:
 ```
 brew install pkg-config
 export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
